@@ -1,35 +1,21 @@
-name: Günlük Harita Güncellemesi
+import pandas as pd
+import folium
+from folium.plugins import MarkerCluster
 
-on:
-  schedule:
-    - cron: '0 6 * * *'  # Her gün sabah 09:00'da (UTC+3)
-  workflow_dispatch:
+# Veri dosyasını oku
+df = pd.read_csv("depremveri.csv")  # CSV dosyanın adı bu olmalı
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+# Harita oluştur
+harita = folium.Map(location=[40.9, 29.3], zoom_start=7)
+marker_cluster = MarkerCluster().add_to(harita)
 
-    steps:
-    - name: Depoyu klonla
-      uses: actions/checkout@v3
+# Noktaları işle
+for i, row in df.iterrows():
+    lokasyon = [row["lat"], row["lon"]]
+    popup_icerik = f"Tarih: {row['tarih']}<br>Büyüklük: {row['buyukluk']}<br>Derinlik: {row['derinlik']} km"
+    folium.Marker(location=lokasyon, popup=popup_icerik).add_to(marker_cluster)
 
-    - name: Python kur
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+# Haritayı HTML olarak kaydet
+harita.save("index.html")
 
-    - name: Paketleri yükle
-      run: |
-        pip install -r requirements.txt
-
-    - name: Haritayı oluştur
-      run: |
-        python main.py
-
-    - name: Haritayı GitHub’a kaydet
-      run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        git add .
-        git commit -m "Harita otomatik güncellendi"
-        git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+print("✅ Harita başarıyla oluşturuldu.")
