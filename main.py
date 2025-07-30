@@ -1,48 +1,31 @@
-import pandas as pd
-import folium
-from geopy.distance import geodesic
+name: Günlük Harita Güncellemesi
 
-url = (
-    "https://earthquake.usgs.gov/fdsnws/event/1/query.csv?"
-    "starttime=2000-01-01&endtime=2025-07-30&minmagnitude=7"
-    "&orderby=time&format=csv"
-)
-df = pd.read_csv(url)
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Her gün sabah 06:00'da çalışır (UTC)
+  workflow_dispatch:     # Manuel başlatmak için
 
-marmara_coords = (40.85, 29.35)
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-df["MarmaraUzaklikKM"] = df.apply(
-    lambda row: geodesic((row["latitude"], row["longitude"]), marmara_coords).km,
-    axis=1
-)
+    steps:
+    - name: Depoyu klonla
+      uses: actions/checkout@v3
 
-m = folium.Map(location=marmara_coords, zoom_start=3, tiles="CartoDB positron")
+    - name: Python kur
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-folium.CircleMarker(
-    location=marmara_coords,
-    radius=6,
-    color='red',
-    fill=True,
-    fill_color='red',
-    popup="Marmara Fayı"
-).add_to(m)
+    - name: Paketleri yükle
+      run: |
+        pip install -r requirements.txt
 
-for _, row in df.iterrows():
-    try:
-        folium.CircleMarker(
-            location=[row["latitude"], row["longitude"]],
-            radius=4 + row["mag"] / 1.5,
-            color="blue",
-            fill=True,
-            fill_color="blue",
-            fill_opacity=0.5,
-            popup=folium.Popup(
-                f"<b>{row['place']}</b><br>"
-                f"Büyüklük: {row['mag']}<br>"
-                f"Uzaklık: {round(row['MarmaraUzaklikKM'], 1)} km"
-            , max_width=250)
-        ).add_to(m)
-    except:
-        continue
+    - name: Haritayı oluştur
+      run: |
+        python harita_olustur.py
 
-m.save("index.html")
+    - name: Haritayı GitHub’a kaydet
+      run: |
+        git config user.name "github-
