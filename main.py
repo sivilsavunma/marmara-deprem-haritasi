@@ -1,41 +1,35 @@
-import pandas as pd
-import folium
-from math import radians, cos, sin, asin, sqrt
+name: Günlük Harita Güncellemesi
 
-MARMARA_LAT = 40.9
-MARMARA_LON = 29.1
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Her gün sabah 09:00'da (UTC+3)
+  workflow_dispatch:
 
-def haversine(lon1, lat1, lon2, lat2):
-    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-    dlon = lon2 - lon1 
-    dlat = lat2 - lat1 
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-    c = 2 * asin(sqrt(a)) 
-    km = 6371 * c
-    return km
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-df = pd.read_csv("depremler.csv")
+    steps:
+    - name: Depoyu klonla
+      uses: actions/checkout@v3
 
-df["uzaklik_km"] = df.apply(lambda row: haversine(MARMARA_LON, MARMARA_LAT, row["longitude"], row["latitude"]), axis=1)
-df["tahmini_stres_artisi"] = df["mag"] / (df["uzaklik_km"] + 1)**2
+    - name: Python kur
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-m = folium.Map(location=[MARMARA_LAT, MARMARA_LON], zoom_start=2, tiles="cartodbpositron")
+    - name: Paketleri yükle
+      run: |
+        pip install -r requirements.txt
 
-folium.Marker(
-    location=[MARMARA_LAT, MARMARA_LON],
-    popup="Marmara Bölgesi",
-    icon=folium.Icon(color="red", icon="info-sign")
-).add_to(m)
+    - name: Haritayı oluştur
+      run: |
+        python main.py
 
-for _, row in df.iterrows():
-    folium.CircleMarker(
-        location=[row["latitude"], row["longitude"]],
-        radius=5 + row["mag"],
-        color="crimson",
-        fill=True,
-        fill_opacity=0.6,
-        popup=f"{row['location']}<br>Büyüklük: {row['mag']}<br>Uzaklık: {row['uzaklik_km']:.0f} km<br>Stres: {row['tahmini_stres_artisi']:.1e}"
-    ).add_to(m)
-
-m.save("index.html")
-print("✅ Harita oluşturuldu.")
+    - name: Haritayı GitHub’a kaydet
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add .
+        git commit -m "Harita otomatik güncellendi"
+        git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
